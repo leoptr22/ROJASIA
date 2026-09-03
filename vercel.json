@@ -4,7 +4,7 @@
     "frontend": {
       "root": "frontend",
       "framework": "vite",
-      "installCommand": "npm install",
+      "installCommand": "npm install --include=dev",
       "buildCommand": "npm run build",
       "outputDirectory": "dist",
       "rewrites": [
@@ -18,7 +18,7 @@
       "root": "backend",
       "framework": "express",
       "entrypoint": "index.ts",
-      "installCommand": "npm install",
+      "installCommand": "npm install --include=dev",
       "functions": {
         "index.ts": {
           "maxDuration": 60,

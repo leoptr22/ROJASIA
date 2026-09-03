@@ -1,0 +1,3 @@
+export function LoadingState({label='Analizando datos reales…'}:{label?:string}){return <div className="loading-card" role="status"><span className="skeleton-line"></span><span>{label}</span></div>}
+export function ErrorState({message,retry}:{message:string;retry:()=>void}){return <div className="error-state"><h2>No pudimos cargar el análisis</h2><p>{message}</p><button className="secondary-button" onClick={retry}>Reintentar</button></div>}
+export function EmptyState({message='No hay operaciones para el período seleccionado.'}:{message?:string}){return <div className="empty-state"><h2>Sin datos en este período</h2><p>{message}</p></div>}

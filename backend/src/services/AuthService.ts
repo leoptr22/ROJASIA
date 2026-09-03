@@ -1,0 +1,3 @@
+import bcrypt from 'bcrypt'; import jwt from 'jsonwebtoken'; import { env } from '../config/env.js';
+export class AuthService { async login(username:string,password:string){ if(!env.INITIAL_ADMIN_PASSWORD_HASH) return null; const valid=username===env.INITIAL_ADMIN_USERNAME && await bcrypt.compare(password,env.INITIAL_ADMIN_PASSWORD_HASH); if(!valid)return null; return jwt.sign({username,role:'ADMINISTRADOR'},env.JWT_SECRET,{expiresIn:'8h'}); } verify(token:string){ return jwt.verify(token,env.JWT_SECRET) as {username:string;role:'ADMINISTRADOR'}; } }
+export const authService=new AuthService();

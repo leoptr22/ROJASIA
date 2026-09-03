@@ -1,0 +1,12 @@
+.git
+.vercel
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+backend/data/current.xlsx
+backend/data/current.json
+backend/data/ai-usage.json
+runtime-logs
+tmp
+output

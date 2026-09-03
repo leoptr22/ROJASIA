@@ -1,0 +1,37 @@
+import PDFDocument from 'pdfkit';
+import type { SalesRepository } from '../repositories/types.js';
+import type { PeriodQuery } from '../utils/period.js';
+import { AnalyticsService } from './AnalyticsService.js';
+import { DecisionIntelligenceService } from './DecisionIntelligenceService.js';
+import { ForecastService } from './ForecastService.js';
+
+const money=(value:number)=>`$ ${Math.round(value).toLocaleString('es-AR')}`;
+const number=(value:number)=>Math.round(value).toLocaleString('es-AR');
+const COLORS={ink:'#17363b',teal:'#167d78',amber:'#e8a23b',muted:'#667a77',line:'#dfe6e3',soft:'#f3f7f6',red:'#a94b3c'};
+
+export class ReportService{
+ private analytics:AnalyticsService;private decisions:DecisionIntelligenceService;private forecasts:ForecastService;
+ constructor(sales:SalesRepository){this.analytics=new AnalyticsService(sales);this.decisions=new DecisionIntelligenceService(sales);this.forecasts=new ForecastService(sales)}
+ async executive(query:PeriodQuery){
+  const [dashboard,decision,forecast]=await Promise.all([this.analytics.getDashboard(query),this.decisions.overview(query),this.forecasts.forecast(3).catch(()=>null)]);
+  const doc=new PDFDocument({size:'A4',margins:{top:44,bottom:48,left:46,right:46},info:{Title:'Informe gerencial - Rojas Intelligence',Author:'Rojas Intelligence',Subject:'Análisis determinístico de la exportación'}});const chunks:Buffer[]=[];doc.on('data',chunk=>chunks.push(Buffer.from(chunk)));const done=new Promise<Buffer>((resolve,reject)=>{doc.on('end',()=>resolve(Buffer.concat(chunks)));doc.on('error',reject)});
+  const width=doc.page.width-92;let page=1;
+  const footer=()=>{const y=doc.page.height-58;doc.save().fontSize(8).fillColor(COLORS.muted).text(`Fuente: ${dashboard.sourceLabel} | Generado ${new Date().toLocaleString('es-AR')}`,46,y,{width:width-70,lineBreak:false}).text(`Página ${page}`,doc.page.width-90,y,{width:44,align:'right',lineBreak:false}).restore()};
+  const header=()=>{doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.teal).text('ROJAS INTELLIGENCE',46,25);doc.moveTo(46,39).lineTo(doc.page.width-46,39).strokeColor(COLORS.line).stroke()};
+  doc.on('pageAdded',()=>{page++;header()});
+  const ensure=(height:number)=>{if(doc.y+height>doc.page.height-60){footer();doc.addPage()}};
+  const title=(text:string,subtitle?:string)=>{ensure(55);const y=doc.y+8;doc.font('Helvetica-Bold').fontSize(17).fillColor(COLORS.ink).text(text,46,y,{width});doc.y=y+23;if(subtitle){doc.font('Helvetica').fontSize(9).fillColor(COLORS.muted).text(subtitle,46,doc.y,{width});doc.y+=14}doc.y+=7};
+  const row=(cells:{text:string;width:number;align?:'left'|'right';bold?:boolean}[],fill=false)=>{ensure(25);const y=doc.y;if(fill)doc.rect(46,y-3,width,23).fill(COLORS.soft);let x=50;for(const cell of cells){doc.font(cell.bold?'Helvetica-Bold':'Helvetica').fontSize(8.5).fillColor(COLORS.ink).text(cell.text,x,y+3,{width:cell.width-8,align:cell.align??'left',ellipsis:true,lineBreak:false});x+=cell.width}doc.x=46;doc.y=y+23};
+
+  doc.rect(0,0,doc.page.width,190).fill(COLORS.ink);doc.font('Helvetica-Bold').fontSize(12).fillColor(COLORS.amber).text('ROJAS INTELLIGENCE',46,48).fontSize(29).fillColor('#ffffff').text('Informe gerencial',46,82).font('Helvetica').fontSize(12).fillColor('#c7d7d8').text(`Período analizado: ${dashboard.period.from} al ${dashboard.period.to}`,46,125).text('Cálculos determinísticos desde la exportación real',46,145);doc.y=220;
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(COLORS.teal).text('RESUMEN EJECUTIVO');doc.moveDown(.8);
+  const cards=[['Facturación',money(dashboard.kpis.revenue)],['Órdenes',number(dashboard.kpis.orders)],['Ticket promedio',money(dashboard.kpis.averageTicket)],['Saldo pendiente',money(dashboard.kpis.outstanding)],['Clientes activos',number(dashboard.kpis.activeCustomers)],['Variación',`${dashboard.kpis.revenueVariation>=0?'+':''}${dashboard.kpis.revenueVariation.toFixed(1)}%`]],cardStartY=doc.y;cards.forEach(([label,value],i)=>{const col=i%3,rowIndex=Math.floor(i/3),x=46+col*(width/3+4),y=cardStartY+rowIndex*65;doc.roundedRect(x,y,width/3-5,54,5).fillAndStroke(COLORS.soft,COLORS.line);doc.font('Helvetica').fontSize(8).fillColor(COLORS.muted).text(label!,x+10,y+9,{width:width/3-25,lineBreak:false});doc.font('Helvetica-Bold').fontSize(14).fillColor(COLORS.ink).text(value!,x+10,y+26,{width:width/3-25,lineBreak:false})});doc.x=46;doc.y=cardStartY+135;
+  title('Prioridades para revisión','Reglas transparentes aplicadas a los indicadores del período');
+  const priorities=[...decision.risks.map(x=>({...x,type:'RIESGO'})),...decision.opportunities.map(x=>({...x,type:'OPORTUNIDAD'}))].slice(0,6);if(!priorities.length)doc.fontSize(9).fillColor(COLORS.muted).text('No se detectaron prioridades con las reglas actuales.',46,doc.y,{width});for(const item of priorities){ensure(52);let y=doc.y;doc.font('Helvetica-Bold').fontSize(8).fillColor(item.type==='RIESGO'?COLORS.red:COLORS.teal).text(item.type,46,y,{width});y=doc.y;doc.fontSize(10).fillColor(COLORS.ink).text(item.title,46,y,{width});y=doc.y;doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted).text(`${item.evidence}. Acción sugerida: ${item.action}`,46,y,{width});doc.y+=6}
+  ensure(190);title('Principales clientes','Ordenados por facturación del período');row([{text:'Cliente',width:width*.56,bold:true},{text:'Facturación',width:width*.44,align:'right',bold:true}],true);dashboard.topCustomers.slice(0,10).forEach((x,i)=>row([{text:`${i+1}. ${x.name}`,width:width*.56},{text:money(x.value),width:width*.44,align:'right'}]));
+  ensure(300);title('Productos y estados');row([{text:'Producto',width:width*.55,bold:true},{text:'Participación',width:width*.45,align:'right',bold:true}],true);dashboard.topProducts.forEach(x=>row([{text:x.name,width:width*.55},{text:`${x.value.toFixed(1)}%`,width:width*.45,align:'right'}]));doc.y+=8;row([{text:'Estado',width:width*.55,bold:true},{text:'Órdenes',width:width*.45,align:'right',bold:true}],true);dashboard.orderStatus.slice(0,10).forEach(x=>row([{text:x.name,width:width*.55},{text:number(x.value),width:width*.45,align:'right'}]));
+  if(forecast){ensure(210);title('Proyección comercial','Escenarios calculados sin intervención de IA');row([{text:'Mes',width:width*.25,bold:true},{text:'Conservador',width:width*.25,align:'right',bold:true},{text:'Probable',width:width*.25,align:'right',bold:true},{text:'Optimista',width:width*.25,align:'right',bold:true}],true);forecast.forecast.forEach(x=>row([{text:x.month,width:width*.25},{text:money(x.conservative.revenue),width:width*.25,align:'right'},{text:money(x.base.revenue),width:width*.25,align:'right'},{text:money(x.optimistic.revenue),width:width*.25,align:'right'}]));doc.y+=8;doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted).text(`Confianza: ${forecast.training.confidence}. Error histórico medio: ${forecast.training.errorPercent}%. ${forecast.method}`,46,doc.y,{width})}
+  ensure(210);title('Alcance y limitaciones');[...decision.limitations,...(forecast?.limitations??[])].filter((x,i,a)=>a.indexOf(x)===i).forEach(text=>{ensure(22);doc.font('Helvetica').fontSize(8.5).fillColor(COLORS.muted).text(`- ${text}`,56,doc.y,{width:width-10});doc.y+=5});doc.y+=6;doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLORS.ink).text('Este informe no utiliza IA generativa. Todas las cifras provienen de cálculos reproducibles sobre el Excel activo.',46,doc.y,{width});
+  footer();doc.end();return done;
+ }
+}

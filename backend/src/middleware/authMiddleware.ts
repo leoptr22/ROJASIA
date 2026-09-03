@@ -1,0 +1,2 @@
+import type { NextFunction,Request,Response } from 'express'; import { authService } from '../services/AuthService.js';
+export function authMiddleware(req:Request,res:Response,next:NextFunction){ const token=req.cookies?.access_token ?? req.headers.authorization?.replace('Bearer ',''); if(!token){res.status(401).json({message:'Autenticación requerida'});return;} try{req.user=authService.verify(token);next();}catch{res.status(401).json({message:'Sesión inválida o vencida'});} }

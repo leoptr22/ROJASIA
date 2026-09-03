@@ -1,24 +1,44 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "vite",
-  "installCommand": "npm install && npm install --prefix backend && npm install --prefix frontend",
-  "buildCommand": "npm run build:vercel",
-  "outputDirectory": "frontend/dist",
-  "fluid": true,
-  "functions": {
-    "api/index.ts": {
-      "maxDuration": 60,
-      "includeFiles": "backend/node_modules/pdfkit/js/data/**"
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite",
+      "installCommand": "npm install",
+      "buildCommand": "npm run build",
+      "outputDirectory": "dist",
+      "rewrites": [
+        {
+          "source": "/(.*)",
+          "destination": "/index.html"
+        }
+      ]
+    },
+    "backend": {
+      "root": "backend",
+      "framework": "express",
+      "entrypoint": "index.ts",
+      "installCommand": "npm install",
+      "functions": {
+        "index.ts": {
+          "maxDuration": 60,
+          "includeFiles": "node_modules/pdfkit/js/data/**"
+        }
+      }
     }
   },
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/index"
+      "source": "/api/(.*)",
+      "destination": {
+        "service": "backend"
+      }
     },
     {
-      "source": "/:path*",
-      "destination": "/index.html"
+      "source": "/(.*)",
+      "destination": {
+        "service": "frontend"
+      }
     }
   ]
 }

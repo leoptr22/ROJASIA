@@ -1,1 +1,1 @@
-export function BrandLogo({className=''}:{className?:string}){return <img className={`brand-logo ${className}`} src="/assets/rojas-isotipo.png" alt="Isotipo Rojas Impresiones"/>}
+export function BrandLogo({className=''}:{className?:string}){const startup=className.split(' ').includes('brand-logo-boot');return <img className={`brand-logo ${className}`} src={startup?'/assets/rojas-arranque.png':'/assets/rojas-isotipo.png'} alt={startup?'Rojas Impresiones':'Isotipo Rojas Impresiones'}/>}

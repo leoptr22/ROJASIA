@@ -21,14 +21,14 @@ export class DataExplorerService {
  async analytics(period?:Period){const rows=await this.sales.list(period);const aggregate=(key:(r:SalesRecord)=>string,value:(r:SalesRecord)=>number=()=>1)=>{const map=new Map<string,number>();for(const r of rows)map.set(key(r),(map.get(key(r))??0)+value(r));return [...map].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value)};return {source:this.sales.getSourceLabel(),records:rows.length,revenue:sum(rows,'total'),balance:sum(rows,'balance'),monthly:aggregate(r=>`${r.date.getFullYear()}-${String(r.date.getMonth()+1).padStart(2,'0')}`,r=>r.total).sort((a,b)=>a.name.localeCompare(b.name)),status:aggregate(r=>r.status),users:aggregate(r=>r.user,r=>r.total),ordersByUser:aggregate(r=>r.user),products:aggregate(r=>r.product,r=>r.total)}}
  async production(period?:Period){
   const [rows,allRows]=await Promise.all([this.sales.list(period),this.sales.list()]);
-  const today=new Date(),todayIso=iso(today),isClosed=(status:string)=>/(entreg|finaliz|complet|cancel)/i.test(status);
+  const referenceIso=period?.to??iso(new Date()),isClosed=(status:string)=>/(entreg|finaliz|complet|cancel)/i.test(status);
   const serialize=(r:SalesRecord)=>({order:`${r.pointOfSale}-${r.number}`,customer:r.fantasyName||r.customer,legalName:r.customer,product:r.product,work:r.work,entryDate:iso(r.date),deliveryDate:iso(r.deliveryDate),status:r.status,user:r.user,total:r.total,balance:r.balance,closed:isClosed(r.status)});
   const queue=rows.map(serialize).sort((a,b)=>a.deliveryDate.localeCompare(b.deliveryDate)||a.order.localeCompare(b.order));
-  const dueToday=allRows.filter(r=>iso(r.deliveryDate)===todayIso).map(serialize).sort((a,b)=>Number(a.closed)-Number(b.closed)||a.customer.localeCompare(b.customer));
-  const open=queue.filter(r=>!r.closed),overdue=open.filter(r=>r.deliveryDate<todayIso),withoutDelivery=open.filter(r=>!r.deliveryDate);
+  const dueToday=allRows.filter(r=>iso(r.deliveryDate)===referenceIso).map(serialize).sort((a,b)=>Number(a.closed)-Number(b.closed)||a.customer.localeCompare(b.customer));
+  const open=queue.filter(r=>!r.closed),overdue=open.filter(r=>r.deliveryDate<referenceIso),withoutDelivery=open.filter(r=>!r.deliveryDate);
   const byStatus=[...new Map(queue.map(r=>r.status).map(status=>[status,queue.filter(r=>r.status===status).length]))].map(([name,value])=>({name,value})).sort((a,b)=>b.value-a.value);
   const byUser=[...new Set(queue.map(r=>r.user))].map(name=>({name,value:queue.filter(r=>r.user===name).length})).sort((a,b)=>b.value-a.value);
-  return {source:this.sales.getSourceLabel(),today:todayIso,summary:{orders:queue.length,open:open.length,closed:queue.length-open.length,overdue:overdue.length,dueToday:dueToday.length,dueTodayOpen:dueToday.filter(r=>!r.closed).length,withoutDelivery:withoutDelivery.length},filters:{statuses:[...new Set(queue.map(r=>r.status))].sort(),users:[...new Set(queue.map(r=>r.user))].sort(),products:[...new Set(queue.map(r=>r.product))].sort()},byStatus,byUser,queue,dueToday};
+  return {source:this.sales.getSourceLabel(),today:referenceIso,summary:{orders:queue.length,open:open.length,closed:queue.length-open.length,overdue:overdue.length,dueToday:dueToday.length,dueTodayOpen:dueToday.filter(r=>!r.closed).length,withoutDelivery:withoutDelivery.length},filters:{statuses:[...new Set(queue.map(r=>r.status))].sort(),users:[...new Set(queue.map(r=>r.user))].sort(),products:[...new Set(queue.map(r=>r.product))].sort()},byStatus,byUser,queue,dueToday};
  }
  private async filterOptions(){const rows=await this.sales.list();return {statuses:[...new Set(rows.map(r=>r.status))].sort(),products:[...new Set(rows.map(r=>r.product))].sort(),users:[...new Set(rows.map(r=>r.user))].sort()}}
 }

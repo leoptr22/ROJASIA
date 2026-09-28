@@ -19,6 +19,7 @@ dataRouter.get('/sales',async(req,res,next)=>{try{const query=salesQuerySchema.p
 dataRouter.get('/customers',async(req,res,next)=>{try{res.json(await service.customers(await currentPeriod(req.query)))}catch(error){next(error)}});
 dataRouter.get('/products',async(req,res,next)=>{try{res.json(await service.products(await currentPeriod(req.query)))}catch(error){next(error)}});
 dataRouter.get('/analytics',async(req,res,next)=>{try{res.json(await service.analytics(await currentPeriod(req.query)))}catch(error){next(error)}});
+dataRouter.get('/production',async(req,res,next)=>{try{res.json(await service.production(await currentPeriod(req.query)))}catch(error){next(error)}});
 dataRouter.get('/forecasts',async(req,res,next)=>{try{const horizon=z.coerce.number().int().min(1).max(6).default(3).parse(req.query.horizon);res.json(await forecasts.forecast(horizon))}catch(error){next(error)}});
 dataRouter.get('/reports/executive.pdf',async(req,res,next)=>{try{const query=periodQuerySchema.parse(req.query),pdf=await reports.executive(query);res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="rojas-informe-${query.period}.pdf"`);res.setHeader('Content-Length',pdf.length);res.end(pdf)}catch(error){next(error)}});
 dataRouter.get('/analytics/clients',async(req,res,next)=>{try{const query=periodQuerySchema.parse(req.query);const inactiveDays=z.coerce.number().int().min(1).max(730).default(90).parse(req.query.inactiveDays);res.json(await clientIntelligence.summary(query,inactiveDays))}catch(error){next(error)}});

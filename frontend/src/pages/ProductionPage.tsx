@@ -1,0 +1,32 @@
+import { useEffect,useMemo,useState } from 'react';
+import { AlertTriangle,CalendarClock,CheckCircle2,ChevronLeft,ChevronRight,ClipboardList,Search,X } from 'lucide-react';
+import { api,type ProductionOrder,type ProductionResponse } from '../services/api';
+import { useGlobalDate } from '../contexts/GlobalDateContext';
+import { EmptyState,ErrorState,LoadingState } from '../components/states';
+
+const PAGE_SIZE=50;
+const money=(value:number)=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(value);
+const dateLabel=(value:string)=>value?new Intl.DateTimeFormat('es-AR').format(new Date(`${value}T12:00:00`)):'Sin fecha';
+
+function OrdersTable({rows,today}:{rows:ProductionOrder[];today:string}){
+ return <div className="table-scroll"><table><thead><tr><th>Entrega</th><th>Orden</th><th>Cliente</th><th>Trabajo</th><th>Estado</th><th>Responsable</th><th>Total</th><th>Saldo</th></tr></thead><tbody>{rows.map(row=><tr key={`${row.order}-${row.deliveryDate}`} className={!row.closed&&row.deliveryDate<today?'production-overdue':''}><td><strong>{dateLabel(row.deliveryDate)}</strong>{!row.closed&&row.deliveryDate<today&&<small>VENCIDA</small>}</td><td>{row.order}</td><td><strong>{row.customer}</strong></td><td><strong>{row.product}</strong><small>{row.work||'Sin descripción'}</small></td><td><span className={row.closed?'status-chip production-closed':'status-chip'}>{row.status}</span></td><td>{row.user||'Sin asignar'}</td><td>{money(row.total)}</td><td className={row.balance>0?'balance-due':''}>{money(row.balance)}</td></tr>)}</tbody></table></div>
+}
+
+export function ProductionPage(){
+ const{queryString}=useGlobalDate();
+ const[data,setData]=useState<ProductionResponse|null>(null),[error,setError]=useState(''),[search,setSearch]=useState(''),[status,setStatus]=useState(''),[user,setUser]=useState(''),[product,setProduct]=useState(''),[onlyOpen,setOnlyOpen]=useState(true),[page,setPage]=useState(1),[showToday,setShowToday]=useState(false);
+ const load=()=>{setData(null);setError('');api.production(queryString).then(setData).catch(e=>setError(e instanceof Error?e.message:'No se pudo cargar producción'))};
+ useEffect(load,[queryString]);
+ const filtered=useMemo(()=>{if(!data)return[];const q=search.trim().toLocaleLowerCase('es');return data.queue.filter(row=>(!q||`${row.order} ${row.customer} ${row.product} ${row.work}`.toLocaleLowerCase('es').includes(q))&&(!status||row.status===status)&&(!user||row.user===user)&&(!product||row.product===product)&&(!onlyOpen||!row.closed))},[data,search,status,user,product,onlyOpen]);
+ useEffect(()=>setPage(1),[search,status,user,product,onlyOpen]);
+ const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)),rows=filtered.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
+ if(error)return <main className="page"><ErrorState message={error} retry={load}/></main>;
+ if(!data)return <main className="page"><LoadingState label="Organizando la producción…"/></main>;
+ return <main className="page production-page">
+  <div className="page-heading"><div><span className="eyebrow">OPERACIÓN / PRODUCCIÓN</span><h1>Control de trabajos y entregas</h1><p>Seguimiento comprobable desde las fechas, estados y responsables registrados en el Excel.</p></div><button className="primary-button production-today-button" onClick={()=>setShowToday(true)}><CalendarClock/> ENTREGAS DE HOY <b>{data.summary.dueToday}</b></button></div>
+  <section className="module-kpis production-kpis"><article><ClipboardList/><span>ÓRDENES DEL PERÍODO</span><strong>{data.summary.orders.toLocaleString('es-AR')}</strong></article><article><CalendarClock/><span>ABIERTAS</span><strong>{data.summary.open.toLocaleString('es-AR')}</strong></article><article className={data.summary.overdue?'production-alert-card':''}><AlertTriangle/><span>VENCIDAS</span><strong>{data.summary.overdue.toLocaleString('es-AR')}</strong></article><article><CheckCircle2/><span>CERRADAS</span><strong>{data.summary.closed.toLocaleString('es-AR')}</strong></article><article><CalendarClock/><span>HOY PENDIENTES</span><strong>{data.summary.dueTodayOpen.toLocaleString('es-AR')}</strong></article></section>
+  <section className="panel production-toolbar"><label className="filter-search"><Search/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Orden, cliente, producto o trabajo…"/></label><select value={status} onChange={e=>setStatus(e.target.value)}><option value="">Todos los estados</option>{data.filters.statuses.map(x=><option key={x}>{x}</option>)}</select><select value={user} onChange={e=>setUser(e.target.value)}><option value="">Todos los responsables</option>{data.filters.users.map(x=><option key={x}>{x}</option>)}</select><select value={product} onChange={e=>setProduct(e.target.value)}><option value="">Todos los productos</option>{data.filters.products.map(x=><option key={x}>{x}</option>)}</select><label className="production-open-toggle"><input type="checkbox" checked={onlyOpen} onChange={e=>setOnlyOpen(e.target.checked)}/> Sólo abiertas</label></section>
+  {!filtered.length?<EmptyState message="No hay trabajos que coincidan con los filtros seleccionados."/>:<section className="panel data-table production-table"><div className="panel-head"><div><span className="panel-kicker">COLA OPERATIVA</span><h2>Trabajos ordenados por fecha de entrega</h2></div><span className="period-chip">{filtered.length.toLocaleString('es-AR')} resultados</span></div><OrdersTable rows={rows} today={data.today}/><div className="pagination"><span>Página {page} de {pages}</span><div><button disabled={page<=1} onClick={()=>setPage(value=>value-1)}><ChevronLeft/></button><button disabled={page>=pages} onClick={()=>setPage(value=>value+1)}><ChevronRight/></button></div></div></section>}
+  {showToday&&<div className="production-modal-backdrop" onClick={()=>setShowToday(false)}><section className="production-modal" role="dialog" aria-modal="true" aria-labelledby="today-title" onClick={event=>event.stopPropagation()}><header><div><span className="eyebrow">AGENDA DIARIA · {dateLabel(data.today)}</span><h2 id="today-title">Todo lo que hay que entregar hoy</h2><p>{data.summary.dueTodayOpen} pendientes de {data.summary.dueToday} trabajos programados.</p></div><button onClick={()=>setShowToday(false)} aria-label="Cerrar"><X/></button></header>{data.dueToday.length?<div className="data-table"><OrdersTable rows={data.dueToday} today={data.today}/></div>:<EmptyState message="No hay entregas registradas para hoy."/>}</section></div>}
+ </main>
+}

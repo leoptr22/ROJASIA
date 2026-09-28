@@ -3,7 +3,7 @@ export interface DecisionBriefing{generatedAt:string;source:string;period:{from:
 export interface AIFinding{id:string;title:string;detail:string;importance:'alta'|'media'|'baja'}
 export interface AIAction{id:string;action:string;reason:string;priority:1|2|3;relatedFindingIds:string[];evidenceLabels:string[]}
 export interface AIEvidence{label:string;value:string;source:string;relatedFindingIds:string[]}
-export interface AIAnswer{mode:'openai'|'deterministic';model?:string;answer:string;findings:AIFinding[];actions:AIAction[];evidence:AIEvidence[];limitations:string[]}
+export interface AIAnswer{mode:'openai'|'deterministic';model?:string;answer:string;table?:{title:string;columns:string[];rows:{cells:string[]}[]};findings:AIFinding[];actions:AIAction[];evidence:AIEvidence[];limitations:string[]}
 export interface AIUsage{month:string;requests:number;inputTokens:number;cachedInputTokens:number;outputTokens:number;costUsd:number}
 export interface AIStatus{enabled:boolean;configured:boolean;model:string;budgetUsd:number;budgetBlocked:boolean;usage:AIUsage&{remainingUsd:number};history:AIUsage[];contextOptimization:{originalBytes:number;selectedBytes:number;reductionPercent:number}}
 export type AIConversationTurn={question:string;answer:AIAnswer};

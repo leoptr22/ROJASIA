@@ -10,6 +10,7 @@ backend/data/current.xlsx
 backend/data/current.json
 backend/data/ai-usage.json
 backend/data/previews/
+backend/data/datasets/
 output/
 runtime-logs/
 tmp/

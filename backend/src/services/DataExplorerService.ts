@@ -1,17 +1,12 @@
 import type { Period, SalesRecord, SalesRepository } from '../repositories/types.js';
+import { classifyCustomer } from './CustomerSegmentationService.js';
 
 const iso=(date:Date)=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
 const sum=(rows:SalesRecord[],field:'total'|'balance')=>rows.reduce((total,row)=>total+row[field],0);
 const includes=(value:string,query:string)=>value.toLocaleLowerCase('es').includes(query.toLocaleLowerCase('es'));
-const normalized=(value:string)=>value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es').replace(/\s+/g,' ').trim();
-// Catálogo provisional confirmado por el usuario; debe reemplazarse cuando entregue la lista definitiva.
-const provisionalPrinters=['imagen digital','efecto visual','greissing concepcion'];
-const provisionalDesigners=['magenta desing','magenta design','luji','sandra beltrame','mantegazza alejo','gutierrez guadalupe','lili bianchi','kalopsia stickers','unigrafica','signos'];
-const namedAs=(name:string,aliases:string[])=>aliases.some(alias=>new RegExp(`(^|\\b)${alias.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}(\\b|$)`,'i').test(name));
-const customerType=(row:SalesRecord):'imprenta'|'disenador'|'publico'=>{const name=normalized(`${row.customer} ${row.fantasyName??''}`);if(namedAs(name,provisionalPrinters))return'imprenta';if(namedAs(name,provisionalDesigners))return'disenador';if(/\b(imprenta|grafi|impresora|editorial|serigraf)/.test(name))return'imprenta';if(/\b(diseno|disenador|agencia|publicidad|estudio creativo)/.test(name))return'disenador';return'publico'};
 type SalesFilters={search?:string;status?:string;product?:string;user?:string;customerType?:'imprenta'|'disenador'|'publico';minTotal?:number;maxTotal?:number;period?:Period};
-const filterSales=(source:SalesRecord[],filters:SalesFilters)=>{let rows=source;if(filters.search){const q=filters.search;rows=rows.filter(r=>includes(r.customer,q)||includes(r.fantasyName??'',q)||includes(r.work,q)||String(r.number).includes(q))}if(filters.status)rows=rows.filter(r=>r.status===filters.status);if(filters.product)rows=rows.filter(r=>r.product===filters.product);if(filters.user)rows=rows.filter(r=>r.user===filters.user);if(filters.customerType)rows=rows.filter(r=>customerType(r)===filters.customerType);if(filters.minTotal!==undefined)rows=rows.filter(r=>r.total>=filters.minTotal!);if(filters.maxTotal!==undefined)rows=rows.filter(r=>r.total<=filters.maxTotal!);return rows.sort((a,b)=>b.date.getTime()-a.date.getTime())};
-const serializeSale=(r:SalesRecord)=>({date:iso(r.date),order:`${r.pointOfSale}-${r.number}`,customer:r.fantasyName||r.customer,legalName:r.customer,customerType:customerType(r),product:r.product,work:r.work,total:r.total,balance:r.balance,status:r.status,user:r.user,deliveryDate:iso(r.deliveryDate)});
+const filterSales=(source:SalesRecord[],filters:SalesFilters)=>{let rows=source;if(filters.search){const q=filters.search;rows=rows.filter(r=>includes(r.customer,q)||includes(r.fantasyName??'',q)||includes(r.work,q)||String(r.number).includes(q))}if(filters.status)rows=rows.filter(r=>r.status===filters.status);if(filters.product)rows=rows.filter(r=>r.product===filters.product);if(filters.user)rows=rows.filter(r=>r.user===filters.user);if(filters.customerType)rows=rows.filter(r=>classifyCustomer(r)===filters.customerType);if(filters.minTotal!==undefined)rows=rows.filter(r=>r.total>=filters.minTotal!);if(filters.maxTotal!==undefined)rows=rows.filter(r=>r.total<=filters.maxTotal!);return rows.sort((a,b)=>b.date.getTime()-a.date.getTime())};
+const serializeSale=(r:SalesRecord)=>({date:iso(r.date),order:`${r.pointOfSale}-${r.number}`,customer:r.fantasyName||r.customer,legalName:r.customer,customerType:classifyCustomer(r),product:r.product,work:r.work,total:r.total,balance:r.balance,status:r.status,user:r.user,deliveryDate:iso(r.deliveryDate)});
 
 export class DataExplorerService {
  constructor(private sales:SalesRepository){}

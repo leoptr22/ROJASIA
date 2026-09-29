@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import ExcelJS from 'exceljs';
+import { ImportService } from './ImportService.js';
+import { persistentStorage } from './PersistentStorageService.js';
+import { XlsxSalesRepository } from '../repositories/XlsxSalesRepository.js';
+
+test('prepared imports preserve data, share concurrent loads and invalidate on replacement',async t=>{
+ const files=new Map<string,Buffer>();let workbookReads=0,preparedReads=0;
+ t.mock.method(persistentStorage,'isCloud',()=>false);
+ t.mock.method(persistentStorage,'write',async(key:string,data:Buffer|string)=>{files.set(key,Buffer.from(data))});
+ t.mock.method(persistentStorage,'read',async(key:string)=>{
+  if(key==='current.xlsx')workbookReads++;
+  if(key.startsWith('datasets/'))preparedReads++;
+  const data=files.get(key);return data?{data,version:'test',updatedAt:new Date()}:null;
+ });
+ t.mock.method(persistentStorage,'remove',async(keys:string|string[])=>{for(const key of Array.isArray(keys)?keys:[keys])files.delete(key)});
+ const workbook=new ExcelJS.Workbook(),sheet=workbook.addWorksheet('Exportación');
+ sheet.addRow(['Fecha','PV','Número','Cliente','Fecha Entrega','Producto','Trabajo','Total','Saldo','Estado','Usuario']);
+ sheet.addRow([new Date('2026-04-02T00:00:00Z'),1,1,'Cliente A',new Date('2026-04-04T00:00:00Z'),'Vinilo','Vinilo impreso',1234.56,234.56,'entregada','Ana']);
+ sheet.addRow([new Date('2026-05-02T00:00:00Z'),1,2,'Cliente B',new Date('2026-05-04T00:00:00Z'),'Papel','100 folletos',2000,0,'entregada','Ana']);
+ const buffer=Buffer.from(await workbook.xlsx.writeBuffer());
+ const importer=new ImportService(),preview=await importer.preview(buffer,'test.xlsx',buffer.length);
+ assert.equal(preview.validRecords,2);assert.equal(preview.errorCount,0);
+ await importer.confirm(preview.token,'test');
+ const repo=new XlsxSalesRepository();
+ const results=await Promise.all(Array.from({length:8},()=>repo.list()));
+ assert.equal(preparedReads,1);assert.equal(workbookReads,0);
+ assert.equal(results[0]![0]!.total,1234.56);assert.equal(results[0]![0]!.balance,234.56);
+ assert.equal(results[0]![0]!.work,'Vinilo impreso');assert.ok(results[0]![0]!.date instanceof Date);
+ assert.equal((await repo.list({from:'2026-05-01',to:'2026-05-31'})).length,1);
+ assert.equal(preparedReads,1);assert.equal(repo.getSourceLabel(),'test.xlsx');
+ const old=await persistentStorage.readJson<{normalizedKey:string}>('current.json');
+ sheet.getCell('H2').value=900;
+ const replacement=Buffer.from(await workbook.xlsx.writeBuffer());
+ const next=await importer.preview(replacement,'replacement.xlsx',replacement.length);
+ await importer.confirm(next.token,'test');
+ assert.equal((await repo.list())[0]!.total,900);assert.equal(preparedReads,2);
+ assert.equal(workbookReads,0);assert.equal(files.has(old!.normalizedKey),false);
+});
